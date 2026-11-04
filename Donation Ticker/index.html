@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    :root { --ticker-speed: 35s; }
+    body { margin: 0; overflow: hidden; font-family: 'VT323', monospace; color: #FFF; background: transparent; }
+    #ticker-wrap { position: absolute; bottom: 0; width: 100%; height: 50px; background-color: rgba(0, 0, 0, 0.85); border-top: 4px solid #D4AF37; border-bottom: 4px solid #D4AF37; display: flex; align-items: center; font-size: 28px; text-transform: uppercase; text-shadow: 2px 2px #000; overflow: hidden; white-space: nowrap; }
+    .ticker-track { display: flex; animation: seamless-ticker var(--ticker-speed) linear infinite; }
+    @keyframes seamless-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    .ticker-item { display: flex; align-items: center; padding-right: 50px; }
+    .fight-canvas { margin-left: 60px; margin-right: 60px; }
+    
+    #alert-box { 
+      display: none; 
+      position: absolute; 
+      bottom: 70px; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      background-color: #8B0000; 
+      border: 4px solid #D4AF37; 
+      padding: 15px 30px; 
+      font-size: 36px; 
+      text-align: center; 
+      text-shadow: 2px 2px #000; 
+      box-shadow: 0px 0px 15px #D4AF37; 
+      animation: popup 0.5s ease-out; 
+      z-index: 9999; /* Boosted to ensure it is always on top */
+    }
+    
+    @keyframes popup { 0% { transform: translate(-50%, 50px); opacity: 0; } 100% { transform: translate(-50%, 0); opacity: 1; } }
+    .gold-text { color: #D4AF37; } .green-text { color: #55FF55; }
+  </style>
+</head>
+<body>
+  <div id="alert-box"><span>⚔️ CRITICAL HIT! ⚔️</span><br><span id="alert-text" class="gold-text"></span></div>
+  <div id="ticker-wrap">
+    <div class="ticker-track">
+      <div class="ticker-item"><span id="ticker-text-1">Loading Guild Data...</span><canvas id="fight-canvas-1" class="fight-canvas" width="300" height="40"></canvas></div>
+      <div class="ticker-item"><span id="ticker-text-2">Loading Guild Data...</span><canvas id="fight-canvas-2" class="fight-canvas" width="300" height="40"></canvas></div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. CONFIGURATION (PRODUCTION MODE)
+    // ==========================================
+    const teamID = "74089"; 
+    const PAGE_LOAD_TIME = Date.now(); 
+
+    // Production settings: Set to auto-switch natively
+    const FORCE_ARC = -1; 
+    const FORCE_CHAPTER = 0; 
+
+    // THE 24 UNIQUE ENEMY COMBINATIONS
+    const ARC_DATA = [
+      { trap: 'mimic', tColor: 'white', boss: 'slime', bColor: 'rgba(0, 255, 100, 0.8)', eColor: 'black' },
+      { trap: 'bomb', tColor: 'orange', boss: 'eye', bColor: 'white', eColor: 'blue' }, 
+      { trap: 'ghost', tColor: 'rgba(200, 200, 255, 0.8)', boss: 'specter', bColor: 'rgba(200, 200, 255, 0.8)', eColor: 'black' },
+      { trap: 'snake', tColor: 'green', boss: 'spider', bColor: '#333', eColor: '#FF5555' },
+      { trap: 'swarm', tColor: 'black', boss: 'golem', bColor: '#777', eColor: 'cyan' },
+      { trap: 'elemental', tColor: 'red', boss: 'dragon', bColor: '#A00', eColor: 'yellow' },
+      { trap: 'elemental', tColor: 'purple', boss: 'slime', bColor: 'rgba(150, 0, 200, 0.8)', eColor: 'lime' }, 
+      { trap: 'elemental', tColor: 'cyan', boss: 'golem', bColor: '#AADDFF', eColor: 'blue' }, 
+      { trap: 'projectile', tColor: 'red', boss: 'eye', bColor: '#555', eColor: 'red' }, 
+      { trap: 'snake', tColor: 'purple', boss: 'spider', bColor: 'purple', eColor: 'pink' }, 
+      { trap: 'swarm', tColor: '#EDC9AF', boss: 'dragon', bColor: '#EDC9AF', eColor: 'orange' }, 
+      { trap: 'elemental', tColor: 'yellow', boss: 'specter', bColor: 'rgba(255, 255, 100, 0.8)', eColor: 'white' }, 
+      { trap: 'mimic', tColor: 'red', boss: 'spider', bColor: 'white', eColor: 'red' }, 
+      { trap: 'ghost', tColor: 'rgba(255, 50, 50, 0.8)', boss: 'specter', bColor: 'rgba(255, 50, 50, 0.8)', eColor: 'yellow' }, 
+      { trap: 'projectile', tColor: 'magenta', boss: 'golem', bColor: 'magenta', eColor: 'white' }, 
+      { trap: 'bomb', tColor: 'purple', boss: 'eye', bColor: 'black', eColor: 'purple' }, 
+      { trap: 'elemental', tColor: 'lime', boss: 'dragon', bColor: 'lime', eColor: 'green' }, 
+      { trap: 'projectile', tColor: 'silver', boss: 'golem', bColor: '#444', eColor: 'red' }, 
+      { trap: 'mimic', tColor: 'black', boss: 'slime', bColor: 'rgba(255, 50, 0, 0.8)', eColor: 'yellow' }, 
+      { trap: 'elemental', tColor: 'cyan', boss: 'dragon', bColor: 'cyan', eColor: 'white' }, 
+      { trap: 'swarm', tColor: 'white', boss: 'spider', bColor: '#DDD', eColor: 'black' }, 
+      { trap: 'bomb', tColor: 'gray', boss: 'slime', bColor: 'rgba(139, 69, 19, 0.8)', eColor: 'black' }, 
+      { trap: 'swarm', tColor: '#222', boss: 'specter', bColor: 'rgba(50, 50, 50, 0.8)', eColor: 'red' }, 
+      { trap: 'elemental', tColor: 'gold', boss: 'dragon', bColor: '#FFD700', eColor: 'white' } 
+    ];
+
+    // ==========================================
+    // 2. DATA & API FETCHING
+    // ==========================================
+    let seenDonationIDs = [], donationQueue = [], isAlerting = false, isFirstLoad = true;
+
+    function playMagicCoinSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(), gainNode = ctx.createGain();
+        osc.type = 'square'; osc.connect(gainNode); gainNode.connect(ctx.destination);
+        osc.frequency.setValueAtTime(987.77, ctx.currentTime); osc.frequency.setValueAtTime(1318.51, ctx.currentTime + 0.1); 
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
+      } catch (e) {
+        // Fail-safe: If browser blocks audio, ignore error so visual alert still triggers
+        console.warn("Audio autoplay blocked, but visual alert will proceed.");
+      }
+    }
+
+    async function fetchExtraLifeData() {
+      try {
+        const teamRes = await fetch(`https://extralife.donordrive.com/api/teams/${teamID}`);
+        if (!teamRes.ok) return;
+        const teamData = await teamRes.json();
+        const donRes = await fetch(`https://extralife.donordrive.com/api/teams/${teamID}/donations`);
+        const donations = await donRes.json();
+
+        let raised = teamData.sumDonations || 0, goal = teamData.fundraisingGoal || 0;
+        let str = `👑 <span class="gold-text">${(teamData.name || "Our Guild").toUpperCase()} PROGRESS:</span> $${raised} / $${goal} 👑 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 📜 <span class="gold-text">LATEST BENEFACTORS:</span> `;
+        donations.slice(0, 5).forEach(d => str += `${d.displayName || "A Mysterious Hero"} ($${d.amount}) • `);
+        
+        // Mid-scroll update: Instantly updates the text in real-time without breaking animation
+        document.getElementById('ticker-text-1').innerHTML = str;
+        document.getElementById('ticker-text-2').innerHTML = str;
+
+        for (let i = donations.length - 1; i >= 0; i--) {
+          if (!seenDonationIDs.includes(donations[i].donationID)) {
+            seenDonationIDs.push(donations[i].donationID);
+            if (!isFirstLoad) donationQueue.push({ name: donations[i].displayName || "A Mysterious Hero", amount: donations[i].amount });
+          }
+        }
+        isFirstLoad = false;
+      } catch (err) { console.error(err); }
+    }
+
+    function processQueue() {
+      if (isAlerting || donationQueue.length === 0) return;
+      isAlerting = true;
+      let cur = donationQueue.shift(); 
+      document.getElementById('alert-text').innerHTML = `${cur.name} gifted <span class="green-text">$${cur.amount}</span>!`;
+      playMagicCoinSound();
+      document.getElementById('alert-box').style.display = 'block';
+      setTimeout(() => { document.getElementById('alert-box').style.display = 'none'; setTimeout(() => isAlerting = false, 2000); }, 8000);
+    }
+
+    setInterval(fetchExtraLifeData, 30000); fetchExtraLifeData(); setInterval(processQueue, 1000);
+
+    // ==========================================
+    // 3. SHUFFLED DECK CHOREOGRAPHY ENGINE
+    // ==========================================
+    const ctx1 = document.getElementById('fight-canvas-1').getContext('2d');
+    const ctx2 = document.getElementById('fight-canvas-2').getContext('2d');
+    
+    let frameCount = 0, storyChapter = 0, currentArc = 0; 
+    let leftX = 50, leftY = 28, leftState = 'idle';
+    let rightX = 250, rightY = 28, rightState = 'idle';
+
+    let arcBag = [];
+    function getNextRandomArc() {
+      try { let stored = localStorage.getItem("extralife_arc_bag"); if (stored) arcBag = JSON.parse(stored); } catch(e) {}
+      if (!arcBag || arcBag.length === 0) {
+        arcBag = Array.from({length: 24}, (_, i) => i);
+        for (let i = arcBag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arcBag[i], arcBag[j]] = [arcBag[j], arcBag[i]]; }
+      }
+      let nextArc = arcBag.pop();
+      try { localStorage.setItem("extralife_arc_bag", JSON.stringify(arcBag)); } catch(e) {}
+      return nextArc;
+    }
+
+    if (FORCE_ARC !== -1) { currentArc = FORCE_ARC; } else { currentArc = getNextRandomArc(); }
+
+    function drawMiniFighter(ctx, x, y, direction, state, color) {
+      ctx.save(); ctx.translate(x, y); ctx.scale(direction, 1); 
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      
+      let headY = -20, bodyY = -16;
+      if (state === 'sit') { headY += 12; bodyY += 12; }
+      if (state === 'cheer') { headY -= 4; bodyY -= 4; }
+
+      ctx.beginPath(); ctx.arc(0, headY, 4, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, bodyY); ctx.lineTo(0, 0); ctx.stroke();
+
+      if (state === 'idle' || state === 'cheer') {
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(4, 12); ctx.stroke();
+        if (state === 'cheer') { 
+           ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(-8, bodyY-4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(8, bodyY-4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(8, bodyY-4); ctx.lineTo(12, -20); ctx.stroke(); 
+        } else {
+           ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(-6, bodyY+12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(6, bodyY+12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(6, bodyY+12); ctx.lineTo(14, bodyY+4); ctx.stroke(); 
+        }
+      } 
+      else if (state === 'step') { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, 10); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6, 10); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(-4, bodyY+14); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(8, bodyY+12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(8, bodyY+12); ctx.lineTo(16, bodyY+6); ctx.stroke(); } 
+      else if (state === 'attack') { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(-6, bodyY+12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(12, bodyY+6); ctx.stroke(); ctx.beginPath(); ctx.moveTo(12, bodyY+6); ctx.lineTo(22, bodyY+14); ctx.stroke(); } 
+      else if (state === 'block') { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(6, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(10, bodyY+12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(10, bodyY+12); ctx.lineTo(10, bodyY-6); ctx.stroke(); }
+      else if (state === 'sit') { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(10, 0); ctx.lineTo(10, 12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, bodyY+4); ctx.lineTo(14, bodyY+8); ctx.stroke(); ctx.beginPath(); ctx.moveTo(14, bodyY+8); ctx.lineTo(24, bodyY+8); ctx.stroke(); ctx.fillStyle = "white"; ctx.fillRect(20, bodyY+5, 6, 6); }
+      ctx.restore();
+    }
+
+    function drawNormalChest(ctx, frame) {
+      ctx.fillStyle = "#8B4513"; ctx.fillRect(140, 16, 20, 12); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 12, 20, 6); ctx.fillStyle = "#FFD700"; ctx.fillRect(148, 14, 4, 4); 
+      if (frame > 120) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); ctx.fillStyle = "#00FFFF"; ctx.beginPath(); ctx.arc(150, 18, 4, 0, Math.PI*2); ctx.fill(); }
+    }
+
+    function drawCampfire(ctx, frame) {
+      ctx.fillStyle = "#5c4033"; ctx.fillRect(145, 26, 10, 4); ctx.fillStyle = (frame % 10 < 5) ? "#FF4500" : "#FF8C00"; ctx.beginPath(); ctx.moveTo(150, 12); ctx.lineTo(144, 26); ctx.lineTo(156, 26); ctx.fill();
+    }
+
+    function drawTrophy(ctx) {
+       ctx.fillStyle = "#FFD700"; ctx.fillRect(145, 15, 10, 15); ctx.beginPath(); ctx.arc(150, 10, 12, 0, Math.PI, true); ctx.fill(); ctx.fillRect(140, 28, 20, 4); 
+    }
+
+    function drawTwist(ctx, frame, arc) {
+      let tData = ARC_DATA[arc] || ARC_DATA[0]; let type = tData.trap, color = tData.tColor;
+      ctx.fillStyle = "#8B4513"; ctx.fillRect(140, 16, 20, 12); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 12, 20, 6); 
+
+      if (type === 'mimic') {
+        if (frame > 100) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 20, 6); ctx.fillStyle = color; for(let i=0; i<4; i++) { ctx.beginPath(); ctx.moveTo(142+i*5, 8); ctx.lineTo(144+i*5, 12); ctx.lineTo(147+i*5, 8); ctx.fill(); ctx.beginPath(); ctx.moveTo(142+i*5, 16); ctx.lineTo(144+i*5, 12); ctx.lineTo(147+i*5, 16); ctx.fill(); } }
+        if (frame > 160) { ctx.clearRect(140, 2, 20, 10); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 12, 20, 6); }
+      } 
+      else if (type === 'bomb') {
+        if (frame > 100) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); }
+        if (frame > 100 && frame < 140) { ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(150, 16, 6, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = "white"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(150, 10); ctx.lineTo(155, 4); ctx.stroke(); if (frame % 4 < 2) { ctx.fillStyle="yellow"; ctx.fillRect(154, 2, 3, 3); } } 
+        else if (frame >= 140 && frame < 160) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(150, 16, 20, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = "yellow"; ctx.beginPath(); ctx.arc(150, 16, 10, 0, Math.PI*2); ctx.fill(); }
+      }
+      else if (type === 'ghost') {
+        if (frame > 100) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); let flyY = 18 - (frame - 100)*0.5; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(150, flyY, 6, Math.PI, 0); ctx.fill(); }
+      }
+      else if (type === 'snake') {
+        if (frame > 100) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); ctx.strokeStyle = color; ctx.lineWidth = 3; let stretch = Math.min(10, (frame - 100) * 0.5); ctx.beginPath(); ctx.moveTo(150, 18); ctx.lineTo(150, 18 - stretch); ctx.stroke(); ctx.fillStyle="red"; ctx.fillRect(149, 16-stretch, 2, 2); }
+      }
+      else if (type === 'swarm') {
+        if (frame > 100 && frame < 160) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); ctx.fillStyle = color; let spread = (frame - 100) * 0.5; ctx.fillRect(150 - spread, 18 - spread, 4, 2); ctx.fillRect(150 + spread, 18 - spread, 4, 2); ctx.fillRect(150, 18 - spread*1.2, 4, 2); }
+      }
+      else if (type === 'elemental') {
+        if (frame > 100 && frame < 160) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); ctx.fillStyle = (frame % 4 < 2) ? color : "white"; ctx.beginPath(); ctx.arc(150, 12, 8, 0, Math.PI*2); ctx.fill(); }
+      }
+      else if (type === 'projectile') {
+        if (frame > 100) { ctx.clearRect(140, 12, 20, 6); ctx.fillStyle = "#D2B48C"; ctx.fillRect(140, 2, 6, 14); }
+        if (frame > 100 && frame < 160) { ctx.fillStyle = color; let projX = 140 - (frame - 100) * 2; ctx.fillRect(projX, 14, 12, 4); }
+      }
+    }
+
+    function drawBoss(ctx, frame, arc) {
+      if (frame > 150) return; 
+      let bData = ARC_DATA[arc] || ARC_DATA[0]; let type = bData.boss, bColor = bData.bColor, eColor = bData.eColor;
+      let breath = Math.sin(frame * 0.1) * 2, size = (frame > 140) ? 25 - (frame - 140)*2 : 25;
+
+      if (type === 'slime') { 
+        ctx.fillStyle = bColor; ctx.beginPath(); ctx.arc(150, 28, size + breath, Math.PI, 0); ctx.fill();
+        if (frame <= 140) { ctx.fillStyle = "white"; ctx.fillRect(138, 14-breath, 6, 6); ctx.fillRect(156, 14-breath, 6, 6); ctx.fillStyle = eColor; ctx.fillRect(140, 16-breath, 2, 2); ctx.fillRect(158, 16-breath, 2, 2); }
+      } 
+      else if (type === 'eye') { 
+        ctx.fillStyle = bColor; ctx.beginPath(); ctx.arc(150, 16 + breath, size*0.8, 0, Math.PI*2); ctx.fill();
+        if (frame <= 140) { ctx.fillStyle = eColor; ctx.beginPath(); ctx.arc(150, 16 + breath, 8, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = "black"; ctx.beginPath(); ctx.arc(150, 16 + breath, 4, 0, Math.PI*2); ctx.fill(); }
+      } 
+      else if (type === 'specter') { 
+        ctx.fillStyle = bColor; ctx.beginPath(); ctx.arc(150, 12 + breath, size*0.7, Math.PI, 0); ctx.lineTo(150 + size*0.7, 30); ctx.lineTo(140, 25); ctx.lineTo(150 - size*0.7, 30); ctx.fill();
+        if (frame <= 140) { ctx.fillStyle = eColor; ctx.fillRect(142, 10+breath, 4, 6); ctx.fillRect(154, 10+breath, 4, 6); }
+      } 
+      else if (type === 'spider') { 
+        ctx.fillStyle = bColor; ctx.beginPath(); ctx.arc(150, 22 + breath, size*0.6, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = bColor; ctx.lineWidth = 2;
+        let legMove = Math.sin(frame * 0.5) * 4;
+        ctx.beginPath(); ctx.moveTo(150, 22); ctx.lineTo(130, 15+legMove); ctx.lineTo(120, 28); ctx.stroke(); ctx.beginPath(); ctx.moveTo(150, 22); ctx.lineTo(170, 15-legMove); ctx.lineTo(180, 28); ctx.stroke();
+        if (frame <= 140) { ctx.fillStyle = eColor; ctx.fillRect(146, 20+breath, 2, 2); ctx.fillRect(152, 20+breath, 2, 2); }
+      } 
+      else if (type === 'golem') { 
+        ctx.fillStyle = bColor; ctx.fillRect(140, 10+breath, 20, 18); ctx.fillRect(144, 2+breath, 12, 8); 
+        if (frame <= 140) { ctx.fillStyle = eColor; ctx.fillRect(146, 4+breath, 3, 2); ctx.fillRect(151, 4+breath, 3, 2); }
+      } 
+      else if (type === 'dragon') { 
+        ctx.fillStyle = bColor; ctx.beginPath(); ctx.moveTo(135, 28); ctx.lineTo(150, 5+breath); ctx.lineTo(165, 28); ctx.fill();
+        if (frame <= 140) { ctx.fillStyle = eColor; ctx.fillRect(145, 15+breath, 3, 3); ctx.fillRect(152, 15+breath, 3, 3); if (frame % 20 < 10) { ctx.fillStyle = eColor; ctx.beginPath(); ctx.arc(150, 25+breath, 6, 0, Math.PI*2); ctx.fill(); } }
+      }
+    }
+
+    function renderScene(ctx, cycle, arc) {
+      ctx.clearRect(0, 0, 300, 40);
+
+      if (storyChapter === 2) { drawNormalChest(ctx, cycle); }
+      else if (storyChapter === 3) { drawTwist(ctx, cycle, arc); }
+      else if (storyChapter === 4) { drawCampfire(ctx, cycle); }
+      else if (storyChapter === 5) { drawBoss(ctx, cycle, arc); }
+      else if (storyChapter === 6) { drawTrophy(ctx); }
+
+      drawMiniFighter(ctx, rightX, rightY, -1, rightState, '#FF5555'); drawMiniFighter(ctx, leftX, leftY, 1, leftState, '#55FF55'); 
+
+      // Universal Hit Sparks System
+      if (storyChapter === 1 && ((cycle > 100 && cycle < 105) || (cycle > 140 && cycle < 145))) { ctx.strokeStyle = "#FFFF00"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(150, 26); ctx.lineTo(155, 20); ctx.stroke(); ctx.beginPath(); ctx.moveTo(150, 26); ctx.lineTo(155, 30); ctx.stroke(); }
+      if (storyChapter === 2 && cycle > 60 && cycle < 120 && cycle % 10 < 5) { ctx.strokeStyle = "#FFFF00"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(145, 16); ctx.lineTo(135, 10); ctx.stroke(); ctx.beginPath(); ctx.moveTo(155, 16); ctx.lineTo(165, 10); ctx.stroke(); }
+      if (storyChapter === 3 && cycle > 100 && cycle < 160 && cycle % 10 < 5) { ctx.strokeStyle = "#FFFF00"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(150, 15, Math.random()*10+5, 0, Math.PI*2); ctx.stroke(); }
+      if (storyChapter === 5 && cycle > 60 && cycle < 140 && cycle % 10 < 5) { ctx.strokeStyle = "#FFFF00"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(150, 15, Math.random()*15+5, 0, Math.PI*2); ctx.stroke(); }
+    }
+
+    function animateFight() {
+      let cycle = frameCount % 240; 
+
+      if (cycle === 0) {
+        if (FORCE_CHAPTER !== 0) { 
+          storyChapter = FORCE_CHAPTER; 
+        } else {
+          storyChapter++;
+          if (storyChapter > 6) {
+             storyChapter = 1; 
+             if (FORCE_ARC === -1) { currentArc = getNextRandomArc(); }
+          }
+        }
+      }
+
+      leftY = 28; rightY = 28; leftState = 'idle'; rightState = 'idle';
+      let lStart = 50, rStart = 250, cLeft = 135, cRight = 165;
+
+      if (storyChapter === 1) { 
+        if (cycle < 60) { let t = cycle / 60; leftX = lStart + (cLeft - lStart)*t; rightX = rStart + (cRight - rStart)*t; leftState = (cycle % 10 < 5) ? 'step' : 'idle'; rightState = (cycle % 10 < 5) ? 'step' : 'idle'; } 
+        else if (cycle < 180) { leftX = cLeft; rightX = cRight; if (cycle < 100) { leftState = 'attack'; rightState = 'block'; } else if (cycle < 140) { leftState = 'block'; rightState = 'attack'; } else { leftState = 'attack'; rightState = 'block'; } } 
+        else { let t = (cycle - 180) / 60; leftX = cLeft - (cLeft - lStart)*t; rightX = cRight - (cRight - rStart)*t; leftState = 'step'; rightState = 'step'; }
+      }
+      else if (storyChapter === 2) { 
+        if (cycle < 60) { let t = cycle / 60; leftX = lStart + (110 - lStart)*t; rightX = rStart + (190 - rStart)*t; leftState = (cycle % 10 < 5) ? 'step' : 'idle'; rightState = (cycle % 10 < 5) ? 'step' : 'idle'; } 
+        else if (cycle < 120) { leftX = 110; rightX = 190; leftState = 'attack'; rightState = 'attack'; } 
+        else if (cycle < 180) { leftX = 110; rightX = 190; leftState = (cycle % 20 < 10) ? 'cheer' : 'idle'; rightState = (cycle % 20 < 10) ? 'cheer' : 'idle'; } 
+        else { let t = (cycle - 180) / 60; leftX = 110 - (110 - lStart)*t; rightX = 190 - (190 - rStart)*t; leftState = 'step'; rightState = 'step'; }
+      }
+      else if (storyChapter === 3) { 
+        if (cycle < 60) { let t = cycle / 60; leftX = lStart + (110 - lStart)*t; rightX = rStart + (190 - rStart)*t; leftState = (cycle % 10 < 5) ? 'step' : 'idle'; rightState = (cycle % 10 < 5) ? 'step' : 'idle'; } 
+        else if (cycle < 100) { leftX = 110; rightX = 190; leftState = 'attack'; rightState = 'attack'; } 
+        else if (cycle < 160) { leftX = 110; rightX = 190; leftState = (cycle % 10 < 5) ? 'attack' : 'idle'; rightState = (cycle % 10 < 5) ? 'attack' : 'idle'; } 
+        else if (cycle < 180) { leftX = 110; rightX = 190; leftState = (cycle % 20 < 10) ? 'cheer' : 'idle'; rightState = (cycle % 20 < 10) ? 'cheer' : 'idle'; } 
+        else { let t = (cycle - 180) / 60; leftX = 110 - (110 - lStart)*t; rightX = 190 - (190 - rStart)*t; leftState = 'step'; rightState = 'step'; }
+      }
+      else if (storyChapter === 4) { 
+        if (cycle < 60) { let t = cycle / 60; leftX = lStart + (125 - lStart)*t; rightX = rStart + (175 - rStart)*t; leftState = (cycle % 10 < 5) ? 'step' : 'idle'; rightState = (cycle % 10 < 5) ? 'step' : 'idle'; } 
+        else if (cycle < 180) { leftX = 125; rightX = 175; leftState = 'sit'; rightState = 'sit'; } 
+        else { let t = (cycle - 180) / 60; leftX = 125 - (125 - lStart)*t; rightX = 175 - (175 - rStart)*t; leftState = 'step'; rightState = 'step'; }
+      }
+      else if (storyChapter === 5) { 
+        if (cycle < 60) { let t = cycle / 60; leftX = lStart + (110 - lStart)*t; rightX = rStart + (190 - rStart)*t; leftState = (cycle % 10 < 5) ? 'step' : 'idle'; rightState = (cycle % 10 < 5) ? 'step' : 'idle'; } 
+        else if (cycle < 150) { leftX = 110; rightX = 190; leftState = (cycle % 10 < 5) ? 'attack' : 'idle'; rightState = (cycle % 10 < 5) ? 'attack' : 'idle'; } 
+        else if (cycle < 180) { leftX = 110; rightX = 190; leftState = (cycle % 20 < 10) ? 'cheer' : 'idle'; leftY = (cycle % 20 < 10) ? 20 : 28; rightState = (cycle % 20 < 10) ? 'cheer' : 'idle'; rightY = (cycle % 20 < 10) ? 20 : 28; } 
+        else { let t = (cycle - 180) / 60; leftX = 110 - (110 - lStart)*t; rightX = 190 - (190 - rStart)*t; leftState = 'step'; rightState = 'step'; }
+      }
+      else if (storyChapter === 6) { 
+        if (cycle < 60) { let t = cycle / 60; leftX = lStart + (120 - lStart)*t; rightX = rStart + (180 - rStart)*t; leftState = (cycle % 10 < 5) ? 'step' : 'idle'; rightState = (cycle % 10 < 5) ? 'step' : 'idle'; } 
+        else if (cycle < 180) { leftX = 120; rightX = 180; leftState = 'cheer'; leftY = (cycle % 20 < 10) ? 20 : 28; rightState = 'cheer'; rightY = (cycle % 20 < 10) ? 20 : 28; } 
+        else { let t = (cycle - 180) / 60; leftX = 120 - (120 - lStart)*t; rightX = 180 - (180 - rStart)*t; leftState = 'step'; rightState = 'step'; }
+      }
+
+      renderScene(ctx1, cycle, currentArc); renderScene(ctx2, cycle, currentArc);
+      frameCount++; requestAnimationFrame(animateFight);
+    }
+    
+    animateFight();
+  </script>
+</body>
+</html>
